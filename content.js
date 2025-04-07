@@ -8,7 +8,7 @@
       
       // Create the Generate Schedule button
       const generateButton = document.createElement('button');
-      generateButton.textContent = 'Generate Visual Schedule';
+      generateButton.textContent = 'Generate Schedule';
       generateButton.className = 'generate-schedule-btn';
       generateButton.addEventListener('click', generateVisualSchedule);
       
@@ -57,6 +57,11 @@
         sectionTitle = `${sectionInfo.textContent} - Schedule`;
       }
       
+      // Create a map to store subject codes and their assigned colors
+      const subjectColorMap = {};
+      const colors = getColorPalette();
+      let colorIndex = 0;
+      
       // Skip the last row which contains the total units
       for (let i = 0; i < tableRows.length - 1; i++) {
         const row = tableRows[i];
@@ -69,6 +74,12 @@
         const days = cells[4].textContent.split('/').map(day => day.trim()); // Days
         const timesRaw = cells[5].textContent.split('/').map(time => time.trim()); // Times
         const roomsRaw = cells[6].textContent.split('/').map(room => room.trim()); // Rooms
+        
+        // Check if color already assigned to this subject
+        if (!subjectColorMap[subject]) {
+          subjectColorMap[subject] = colors[colorIndex % colors.length];
+          colorIndex++;
+        }
         
         // Process each day-time-room combination
         for (let j = 0; j < days.length; j++) {
@@ -86,7 +97,7 @@
             startTime,
             endTime,
             room,
-            color: getRandomColor() // Assign random colors to differentiate subjects
+            color: subjectColorMap[subject] // Use the assigned color for this subject
           });
         }
       }
@@ -97,10 +108,9 @@
       };
     }
   
-    // Generate a random color for subjects
-    function getRandomColor() {
-      const colors = [
-        '#4CAF50', // Green
+    // Generate a palette of distinct colors for subjects
+    function getColorPalette() {
+      return [
         '#2196F3', // Blue
         '#9C27B0', // Purple
         '#FF9800', // Orange
@@ -108,9 +118,26 @@
         '#009688', // Teal
         '#3F51B5', // Indigo
         '#795548', // Brown
-        '#607D8B'  // Blue Grey
+        '#607D8B', // Blue Grey
+        '#E91E63', // Pink
+        '#673AB7', // Deep Purple
+        '#FFC107', // Amber
+        '#00BCD4', // Cyan
+        '#8BC34A', // Light Green
+        '#FF5722', // Deep Orange
+        '#9E9E9E', // Grey
+        '#CDDC39', // Lime
+        '#03A9F4', // Light Blue
+        '#D32F2F', // Dark Red
+        '#7B1FA2', // Dark Purple
+        '#1976D2', // Dark Blue
+        '#388E3C', // Dark Green
+        '#AFB42B', // Dark Lime
+        '#0097A7', // Dark Cyan
+        '#FFA000', // Dark Amber
+        '#5D4037', // Dark Brown
+        '#455A64'  // Dark Blue Grey
       ];
-      return colors[Math.floor(Math.random() * colors.length)];
     }
   
     // Convert single letter day codes to full day names
@@ -214,12 +241,20 @@
       applyColorBtn.className = 'apply-color-btn';
       applyColorBtn.addEventListener('click', () => {
         const selectedCells = document.querySelectorAll('.subject-cell.selected');
-        selectedCells.forEach(cell => {
-          cell.style.backgroundColor = colorPicker.value;
-        });
+        const subjectCode = selectedCells.length > 0 ? selectedCells[0].dataset.subjectCode : null;
+        
+        // If we have a subject code, apply the color to all cells with that code
+        if (subjectCode) {
+          document.querySelectorAll(`.subject-cell[data-subject-code="${subjectCode}"]`).forEach(cell => {
+            cell.style.backgroundColor = colorPicker.value;
+          });
+        } else {
+          // Otherwise just apply to selected cells
+          selectedCells.forEach(cell => {
+            cell.style.backgroundColor = colorPicker.value;
+          });
+        }
       });
-      
- 
       
       // Download button
       const downloadBtn = document.createElement('button');
@@ -254,8 +289,28 @@
       resetBtn.textContent = 'Reset Colors';
       resetBtn.className = 'reset-btn';
       resetBtn.addEventListener('click', () => {
+        // Get all unique subject codes
+        const subjectCodes = new Set();
         document.querySelectorAll('.subject-cell').forEach(cell => {
-          cell.style.backgroundColor = '';
+          subjectCodes.add(cell.dataset.subjectCode);
+        });
+        
+        // Recreate color map
+        const colors = getColorPalette();
+        const subjectColorMap = {};
+        let colorIndex = 0;
+        
+        subjectCodes.forEach(code => {
+          subjectColorMap[code] = colors[colorIndex % colors.length];
+          colorIndex++;
+        });
+        
+        // Apply colors to cells
+        document.querySelectorAll('.subject-cell').forEach(cell => {
+          const code = cell.dataset.subjectCode;
+          if (code && subjectColorMap[code]) {
+            cell.style.backgroundColor = subjectColorMap[code];
+          }
         });
       });
       
@@ -353,17 +408,21 @@
       return tableContainer;
     }
   
-    // Place subject cells in the schedule
+    // Place the subject cells in the schedule
     function placeSubjectCells(courses) {
       const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       
       courses.forEach(course => {
         const dayIndex = days.indexOf(course.day);
-        if (dayIndex === -1) return; // Skip if day not found
+        if (dayIndex === -1) return;
         
         // Create subject cell
         const subjectCell = document.createElement('div');
         subjectCell.className = 'subject-cell';
+        // Add data attributes for easier selection
+        subjectCell.dataset.subjectCode = course.subject;
+        subjectCell.dataset.subjectTitle = course.title;
+        
         subjectCell.innerHTML = `
           <div class="subject-code">${course.subject}</div>
           <div class="subject-title">${course.title}</div>
@@ -377,44 +436,89 @@
         // Make cells selectable for custom coloring
         subjectCell.addEventListener('click', function(e) {
           e.stopPropagation();
-          if (this.classList.contains('selected')) {
-            this.classList.remove('selected');
-          } else {
-            this.classList.add('selected');
+          
+          // First, clear all selected cells
+          document.querySelectorAll('.subject-cell.selected').forEach(cell => {
+            cell.classList.remove('selected');
+          });
+          
+          // Then add selected class to clicked cell
+          this.classList.add('selected');
+          
+          // Option to select all cells with the same subject code
+          if (e.shiftKey) {
+            const subjectCode = this.dataset.subjectCode;
+            document.querySelectorAll(`.subject-cell[data-subject-code="${subjectCode}"]`).forEach(cell => {
+              cell.classList.add('selected');
+            });
           }
         });
   
-        // Find the cell for this day and starting hour
+        // Calculate position and size
         const startDecimal = course.startTime.decimal();
         const endDecimal = course.endTime.decimal();
         const closestHour = Math.floor(startDecimal);
         
-        // Get the day column
         const startRow = document.querySelector(`.time-row[data-hour="${closestHour}"]`);
         if (!startRow) return;
   
         const dayCell = startRow.querySelector(`.day-cell[data-day="${course.day}"]`);
         if (!dayCell) return;
         
-        // Calculate position and size
-        const rowHeight = 60; // Height of each hour row in pixels
-        
-        // Calculate top position based on minutes past the hour
+        const rowHeight = 60;
         const minuteOffset = (startDecimal - closestHour) * rowHeight;
-        const top = minuteOffset;
-        
-        // Calculate height based on duration
         const duration = endDecimal - startDecimal;
         const height = duration * rowHeight;
         
         // Set styles for positioning
-        subjectCell.style.top = `${top}px`;
+        subjectCell.style.top = `${minuteOffset}px`;
         subjectCell.style.height = `${height}px`;
-        subjectCell.style.width = '100%';
+        subjectCell.style.width = 'calc(100% - 4px)';
         
         // Add the cell to the day column
         dayCell.style.position = 'relative';
         dayCell.appendChild(subjectCell);
+  
+        // Adjust font size after the cell is added to the DOM
+        setTimeout(() => adjustTitleFontSize(subjectCell), 0);
       });
     }
+  
+    function adjustTitleFontSize(subjectCell) {
+      const titleElement = subjectCell.querySelector('.subject-title');
+      const title = titleElement.textContent;
+      
+      // Create a temporary measuring element
+      const temp = document.createElement('div');
+      temp.style.cssText = `
+        position: absolute;
+        visibility: hidden;
+        width: ${titleElement.offsetWidth}px;
+        font-size: 12px;
+        line-height: 1.2;
+      `;
+      temp.textContent = title;
+      document.body.appendChild(temp);
+  
+      // Measure the height
+      const height = temp.offsetHeight;
+      const lineHeight = parseFloat(getComputedStyle(temp).lineHeight);
+      const lines = Math.round(height / lineHeight);
+  
+      // Remove existing classes
+      titleElement.classList.remove('single-line', 'two-lines', 'three-lines');
+  
+      // Add appropriate class based on number of lines
+      if (lines === 1) {
+        titleElement.classList.add('single-line');
+      } else if (lines === 2) {
+        titleElement.classList.add('two-lines');
+      } else {
+        titleElement.classList.add('three-lines');
+      }
+  
+      // Clean up
+      document.body.removeChild(temp);
+    }
+  
   })();
