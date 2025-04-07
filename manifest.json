@@ -1,0 +1,27 @@
+
+{
+    "manifest_version": 3,
+    "name": "FEU Tech Schedule Generator",
+    "version": "1.0",
+    "description": "Generates a customizable visual schedule from FEU Tech SOLAR",
+    "permissions": ["activeTab", "scripting", "storage"],
+    "action": {
+      "default_icon": {
+        "16": "48.png",
+        "48": "48.png",
+        "128": "48.png"
+      }
+    },
+    "content_scripts": [
+      {
+        "matches": ["*://solar.feutech.edu.ph/student/saf/*"],
+        "js": ["content.js"],
+        "css": ["styles.css"]
+      }
+    ],
+    "icons": {
+      "16": "48.png",
+      "48": "48.png",
+      "128": "48.png"
+    }
+  }
