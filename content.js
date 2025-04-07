@@ -260,29 +260,122 @@
       const downloadBtn = document.createElement('button');
       downloadBtn.textContent = 'Save as PNG';
       downloadBtn.className = 'download-btn';
-      downloadBtn.addEventListener('click', async () => {
+      downloadBtn.addEventListener('click', () => {
         const scheduleElement = document.querySelector('.visual-schedule-container');
         if (!scheduleElement) return;
-      
-        // Load html2canvas dynamically if not already loaded
-        if (typeof html2canvas === 'undefined') {
-          const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-          script.onload = () => saveScheduleAsPNG(scheduleElement);
-          document.body.appendChild(script);
-        } else {
-          saveScheduleAsPNG(scheduleElement);
-        }
+        
+        // Use the html2canvas function from the extension's own files
+        saveScheduleAsPNG(scheduleElement);
       });
       
       function saveScheduleAsPNG(element) {
-        html2canvas(element).then(canvas => {
-          const link = document.createElement('a');
-          link.download = 'schedule.png';
-          link.href = canvas.toDataURL('image/png');
-          link.click();
+        // Create a temporary container
+        const tempContainer = document.createElement('div');
+        tempContainer.className = 'visual-schedule-container';
+        tempContainer.style.cssText = `
+            position: fixed;
+            left: -9999px;
+            top: -9999px;
+            background-color: white;
+            padding: 20px;
+            width: ${element.offsetWidth}px;
+            margin: 20px auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        `;
+        
+        // Clone the entire content
+        const content = element.cloneNode(true);
+        
+        // Remove toolbar from the cloned content
+        const toolbar = content.querySelector('.schedule-toolbar');
+        if (toolbar) {
+            toolbar.remove();
+        }
+        
+        // Ensure all subject cells maintain their styles
+        const originalCells = element.querySelectorAll('.subject-cell');
+        const clonedCells = content.querySelectorAll('.subject-cell');
+        
+        originalCells.forEach((originalCell, index) => {
+            if (clonedCells[index]) {
+                // Copy computed styles
+                const computedStyle = window.getComputedStyle(originalCell);
+                clonedCells[index].style.cssText = computedStyle.cssText;
+                
+                // Ensure background color is copied
+                clonedCells[index].style.backgroundColor = originalCell.style.backgroundColor;
+                
+                // Copy all class names to maintain styling
+                clonedCells[index].className = originalCell.className;
+                
+                // Ensure correct positioning
+                clonedCells[index].style.position = 'absolute';
+                clonedCells[index].style.top = originalCell.style.top;
+                clonedCells[index].style.height = originalCell.style.height;
+                clonedCells[index].style.width = 'calc(100% - 4px)';
+                
+                // Copy font sizes for each internal element
+                ['subject-code', 'subject-title', 'subject-room', 'subject-time'].forEach(className => {
+                    const originalElement = originalCell.querySelector('.' + className);
+                    const clonedElement = clonedCells[index].querySelector('.' + className);
+                    if (originalElement && clonedElement) {
+                        const style = window.getComputedStyle(originalElement);
+                        clonedElement.style.cssText = style.cssText;
+                    }
+                });
+            }
         });
-      }
+        
+        // Ensure table styles are preserved
+        const originalTable = element.querySelector('.visual-schedule');
+        const clonedTable = content.querySelector('.visual-schedule');
+        if (originalTable && clonedTable) {
+            clonedTable.className = originalTable.className;
+            const tableStyle = window.getComputedStyle(originalTable);
+            clonedTable.style.cssText = tableStyle.cssText;
+        }
+        
+        // Ensure title styles are preserved
+        const originalTitle = element.querySelector('.schedule-title');
+        const clonedTitle = content.querySelector('.schedule-title');
+        if (originalTitle && clonedTitle) {
+            const titleStyle = window.getComputedStyle(originalTitle);
+            clonedTitle.style.cssText = titleStyle.cssText;
+            clonedTitle.style.margin = '0 auto 20px auto';
+            clonedTitle.style.display = 'table';
+        }
+        
+        // Add the cloned content to the temporary container
+        tempContainer.appendChild(content);
+        
+        // Add to DOM
+        document.body.appendChild(tempContainer);
+        
+        // Use chrome.runtime.sendMessage to communicate with background script
+        chrome.runtime.sendMessage(
+            { 
+                action: "captureScreenshot", 
+                elementSelector: ".visual-schedule-container" 
+            },
+            (response) => {
+                // Remove the temporary container
+                document.body.removeChild(tempContainer);
+                
+                if (response && response.dataUrl) {
+                    // Create link to download the image
+                    const link = document.createElement('a');
+                    link.download = 'schedule.png';
+                    link.href = response.dataUrl;
+                    link.click();
+                } else {
+                    console.error("Failed to capture screenshot:", response?.error || "Unknown error");
+                    alert("Failed to save schedule as PNG. Please try again.");
+                }
+            }
+        );
+    }
       
       // Reset button
       const resetBtn = document.createElement('button');
